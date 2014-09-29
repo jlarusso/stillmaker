@@ -15,8 +15,9 @@ class Stillmaker
 
   def self.print_intro
     puts ""
+    ignored = ['stillmaker.rb', 'README.md', 'Gemfile', 'Gemfile.lock']
     Dir.glob("*") do |file|
-      unless file == "stillmaker.rb" || file == "README.md"
+      unless ignored.include? file
         puts color(file)
       end
     end
