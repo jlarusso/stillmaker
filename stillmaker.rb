@@ -1,58 +1,78 @@
 require 'rubygems'
 require 'streamio-ffmpeg'
-
-def color(str)
-  "\033[34m#{str}\033[0m"
-end
+require 'pry'
 
 class Stillmaker
-  attr_reader :video_str, :video
+  attr_reader :selection, :video, :choices
 
   def initialize
-    puts "Enter video file name:"
-    @video_str = gets.chomp
+    build_choices
+    print_choices
+    get_input
+    load_video
+    get_interval
+    start_prompt
   end
 
-  def self.print_intro
-    puts ""
-    ignored = ['stillmaker.rb', 'README.md', 'Gemfile', 'Gemfile.lock']
-    Dir.glob("*") do |file|
-      unless ignored.include? file
-        puts color(file)
-      end
+  def cprint(str)
+    puts "\033[34m#{str}\033[0m"
+  end
+
+  def build_choices
+    @choices = Dir.glob("*.mp4")
+  end
+
+  def print_choices
+    @choices.each_with_index do |choice, i|
+      puts "#{i}: #{choice}"
     end
   end
 
-  def load_video
-    @video_name = @video_str.split('.').first
-    Dir.mkdir(@video_name)
+  def get_input
+    cprint "Enter selection number:"
+    @selection = gets.chomp.to_i
+    puts ''
+  end
 
-    @video = FFMPEG::Movie.new(video_str)
+  def load_video
+    @video_file = @choices[@selection]
+    @video_name = @video_file.split('.').first
+    @video = FFMPEG::Movie.new(@video_file)
   end
 
   def get_interval
-    puts "", color("Video duration: #{@video.duration}")
-    puts "Enter interval between screenshots in seconds:"
+    puts "Video duration: #{@video.duration} seconds"
+    cprint "Enter interval between screenshots in seconds:"
     @interval = gets.chomp.to_i
+    puts ''
   end
 
+  def start_prompt
+    @num_of_shots = (@video.duration / @interval).to_i
+    puts "Screenshot count: #{@num_of_shots}"
+    cprint "Enter (y) to continue"
+    if gets.chomp == "y"
+      Dir.mkdir(@video_name)
+      take_interval
+    end
+  end
+
+  # a good strategy if you have large intervals
+  # skips to each interval starting at beginning each time
   def take_screenshots
-    num_of_shots = (@video.duration / @interval).round
-    num_of_shots.times do |i|
+    @num_of_shots.times do |i|
       seek_time = i * @interval
       shot_name = "#{@video_name}/#{seek_time}_#{@video_name}.jpg"
       video.screenshot(shot_name, seek_time: seek_time)
     end
   end
 
+  # a good strategy if you have very short intervals
+  # scans through video
   def take_interval
-    `ffmpeg -i #{@video_str} -f image2 -vf fps=fps=#{@interval} #{@video_name}/%05d.png`
+    take_screenshots
+    # `ffmpeg -i #{@video_file} -f image2 -vf fps=fps=#{@interval} #{@video_name}/%05d.png`
   end
 end
 
-Stillmaker.print_intro
 s = Stillmaker.new
-s.load_video
-s.get_interval
-# s.take_screenshots
-s.take_interval
