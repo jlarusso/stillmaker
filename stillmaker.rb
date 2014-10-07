@@ -37,6 +37,7 @@ class Stillmaker
   def load_video
     @video_file = @choices[@selection]
     @video_name = @video_file.split('.').first
+    @shot_path = "#{Time.now.to_i}-#{@video_name}"
     @video = FFMPEG::Movie.new(@video_file)
   end
 
@@ -52,7 +53,7 @@ class Stillmaker
     puts "Screenshot count: #{@num_of_shots}"
     cprint "Enter (y) to continue"
     if gets.chomp == "y"
-      Dir.mkdir(@video_name)
+      Dir.mkdir(@shot_path)
       take_interval
     end
   end
@@ -62,7 +63,7 @@ class Stillmaker
   def take_screenshots
     @num_of_shots.times do |i|
       seek_time = i * @interval
-      shot_name = "#{@video_name}/#{seek_time}_#{@video_name}.jpg"
+      shot_name = "#{@shot_path}/#{seek_time}_#{@video_name}.jpg"
       video.screenshot(shot_name, seek_time: seek_time)
     end
   end
