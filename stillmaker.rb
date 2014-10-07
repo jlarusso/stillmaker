@@ -1,17 +1,26 @@
 require 'rubygems'
 require 'streamio-ffmpeg'
+require 'benchmark'
 require 'pry'
 
 class Stillmaker
-  attr_reader :selection, :video, :choices
+  attr_reader :video, :choices
+  attr_accessor :selection, :interval, :strategy
 
-  def initialize
+  def initialize(params = nil)
+    set_params(params) if params
     build_choices
     print_choices
-    get_input
+    get_input unless @selection
     load_video
-    get_interval
+    get_interval unless @interval
     start_prompt
+  end
+
+  def set_params(params)
+    params.each do |k, v|
+      send("#{k}=", v)
+    end
   end
 
   def cprint(str)
@@ -36,9 +45,14 @@ class Stillmaker
 
   def load_video
     @video_file = @choices[@selection]
-    @video_name = @video_file.split('.').first
-    @shot_path = "#{Time.now.to_i}-#{@video_name}"
-    @video = FFMPEG::Movie.new(@video_file)
+
+    if @video_file
+      @video_name = @video_file.split('.').first
+      @shot_path = "#{Time.now.to_i}-#{@video_name}-#{@strategy.to_s}"
+      @video = FFMPEG::Movie.new(@video_file)
+    else
+      raise "Video file not found"
+    end
   end
 
   def get_interval
@@ -50,17 +64,24 @@ class Stillmaker
 
   def start_prompt
     @num_of_shots = (@video.duration / @interval).to_i
+    Dir.mkdir(@shot_path)
+    run_strategy
     puts "Screenshot count: #{@num_of_shots}"
-    cprint "Enter (y) to continue"
-    if gets.chomp == "y"
-      Dir.mkdir(@shot_path)
-      take_interval
+  end
+
+  def run_strategy
+    case @strategy
+    when :seek
+      seek_strategy
+    when :scan
+      scan_strategy
     end
   end
 
   # a good strategy if you have large intervals
+  # uses streamio-ffmpeg ruby wrapper
   # skips to each interval starting at beginning each time
-  def take_screenshots
+  def seek_strategy
     @num_of_shots.times do |i|
       seek_time = i * @interval
       shot_name = "#{@shot_path}/#{seek_time}_#{@video_name}.jpg"
@@ -70,10 +91,16 @@ class Stillmaker
 
   # a good strategy if you have very short intervals
   # scans through video
-  def take_interval
-    take_screenshots
-    # `ffmpeg -i #{@video_file} -f image2 -vf fps=fps=#{@interval} #{@video_name}/%05d.png`
+  def scan_strategy
+    `ffmpeg -i #{@video_file} -f image2 -vf fps=fps=1/#{@interval} #{@shot_path}/%05d.png`
   end
 end
 
-s = Stillmaker.new
+# params = { selection: 0, interval: 50, strategy: :seek }
+# params = { selection: 0, interval: 50, strategy: :scan }
+Stillmaker.new({ strategy: :scan })
+
+# Benchmark.bm do |x|
+#   x.report("scan:") { Stillmaker.new({ selection: 0, interval: 100, strategy: :scan }) }
+#   x.report("seek:") { Stillmaker.new({ selection: 0, interval: 100, strategy: :seek }) }
+# end
